@@ -380,18 +380,21 @@ class mod_zoom_webservice {
                 }
                 break;
             case $this->_is_api_version(2):
-                $url = 'users/'.$email;
-                try {
-                    $user = $this -> make_call($url);
-                }catch (moodle_exception $e) {
-                    require_once($CFG->dirroot.'/mod/ncmzoom/lib.php');
-                    if (!zoom_is_user_not_found_error($e->getMessage())) {
-                        return false;
+                $users_list = $this->list_users();
+                if (!empty($users_list) && isset($users_list->users) &&
+                        !empty($users_list->users) && is_array($users_list->users)) {
+                    foreach ($users_list->users as $apiuser) {
+                        if ($apiuser->email == $email) {
+                            $apiuser->settings = $this->_get_user_settings($apiuser->id);
+                            $apiuser->enable_webinar = $apiuser->settings->feature->webinar;
+                            if ($email == $USER->email) {
+                                $this->current_user = $apiuser;
+                            }
+                            $this->lastresponse = $apiuser;
+                            return $apiuser;
+                        }
                     }
                 }
-                if(empty(!$user)){
-                    return true;
-                } 
                 break;
         }
 
@@ -416,8 +419,7 @@ class mod_zoom_webservice {
                 'host_video' => $zoom->option_host_video ? true : false,
                 'participant_video' => $zoom->option_participants_video ? true : false,
                 'join_before_host' => $zoom->option_jbh ? true : false,
-                'audio' => $zoom->option_audio ? true : false,
-                'alternative_hosts' => $zoom->option_alternative_hosts
+                'audio' => $zoom->option_audio ? true : false
             )
         );
         if (isset($CFG->timezone) && !empty($CFG->timezone)) {
@@ -427,7 +429,9 @@ class mod_zoom_webservice {
             $data['password'] = $zoom->password;
         }
         if ($zoom->recurring) {
-            $data['type'] = ZOOM_RECURRING_MEETING;
+            $data['recurrence'] = array(
+                'type' => ZOOM_RECURRING_MEETING
+            );
             unset($data['start_time']);
             unset($data['duration']);
         }
@@ -530,7 +534,7 @@ class mod_zoom_webservice {
             case $this->_is_api_version(2):
                 $url = $zoom->webinar ? 'webinars/'.$zoom->meeting_id : 'meetings/'.
                     $zoom->meeting_id;
-                $this->make_call($url, $this->_make_meeting_data_v2($zoom), 'patch');
+                $this->make_call($url, $this->_make_meeting_data_v2($zoom), 'post');
                 break;
         }
 
